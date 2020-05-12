@@ -1,3 +1,9 @@
+* No need to re-scrap page 1 after "parse_thread".
+* Add more security measures:
+  - Add rescues all around.
+  - Maybe modify some of the parsing strategies to be more consistent
+    (ie. use parent.at instead of next or children[n]).
+
 Additional things to scrap from threads:
 
 * Pins.
