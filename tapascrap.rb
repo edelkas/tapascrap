@@ -32,7 +32,8 @@ def download_forum(id)
 end
 
 def parse_posts(t, s)
-  doc = download_thread(t, s)
+  doc = download_thread(t, s) rescue nil
+  return if doc.nil? # thread does not exist
   posts = doc.at('div[class="viewtopic_wrapper topic_data_for_js"]')
              .search('div[class="postbody"]')
              .map{ |p|
@@ -50,7 +51,8 @@ def parse_posts(t, s)
 end
 
 def parse_thread(t)
-  doc = download_thread(t)
+  doc = download_thread(t) rescue nil
+  return if doc.nil? # thread does not exist
   atts = {
     id: t,
     name: doc.at('h1[itemprop="headline"]').content.to_s,
@@ -70,7 +72,8 @@ end
 # and create all members based on the posts (we won't be able to find members
 # who didn't post). After that, we loop through them executing this method.
 def parse_member(id)
-  doc = download_member(id)
+  doc = download_member(id) rescue nil
+  return if doc.nil? # member does not exist
   atts = {
     username: doc.at('span[class="edit-username-span"]')['data-origin-name'],
     rank: doc.at('span[class="profile-rank-name"]').content
