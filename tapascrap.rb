@@ -55,6 +55,7 @@ def parse_thread(t)
   return if doc.nil? # thread does not exist
   atts = {
     id: t,
+    forum: doc.search('span[data-forum-id]').last['data-forum-id'].to_i,
     name: doc.at('h1[itemprop="headline"]').content.to_s,
     user_id: doc.at('h1[itemprop="headline"]').parent.at('dl')['data-uid'],
     username: doc.at('h1[itemprop="headline"]').parent.at('a[class="username"]').content.to_s,
@@ -105,6 +106,6 @@ def parse_forum(id)
     id: id,
     name: doc.at('h2').content.strip rescue "",
     description: doc.at('p[class="forum-description cl-af"]').content rescue "",
-    parent: doc.search('meta[itemprop="position"]').last.parent['data-forum-id'].to_i rescue 0 # 0 if root
+    parent: doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
   }
 end
