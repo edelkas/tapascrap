@@ -1,11 +1,87 @@
+# Modules
 require 'open-uri'
+# Gems
 require 'nokogiri'
+require 'active_record'
 
 THREAD_START = 1
 THREAD_END = 24462
 FORUM_START = 1
 FORUM_END = 66
 POSTS_PER_PAGE = 10
+CONFIG = {
+  'adapter'  => 'sqlite3',
+  'database' => 'tapa.sql'
+}
+
+class Post < ActiveRecord::Base
+  belongs_to :thread
+  belongs_to :user
+end
+
+class Thread < ActiveRecord::Base
+  belongs_to :forum
+  belongs_to :user
+  has_many :posts
+end
+
+class Forum < ActiveRecord::Base
+  has_many :threads
+end
+
+class User < ActiveRecord::Base
+  has_many :posts
+  has_many :threads
+  has_and_belongs_to_many :groups
+end
+
+class Group < ActiveRecord::Base
+  has_and_belongs_to_many :users
+end
+
+def setup_db
+  ActiveRecord::Base.establish_connection(
+    :adapter  => CONFIG['adapter'],
+    :database => CONFIG['database']
+  )
+  ActiveRecord::Base.connection.create_table :posts do |t|
+    t.references :thread, index: true
+    t.references :user, index: true
+    t.timestamp :date
+    t.string :content
+  end
+  ActiveRecord::Base.connection.create_table :threads do |t|
+    t.references :forum, index: true
+    t.references :user, index: true
+    t.string :name
+    t.timestamp :date
+    t.boolean :pinned
+    t.boolean :locked
+    t.boolean :announcement
+    t.boolean :poll
+  end
+  ActiveRecord::Base.connection.create_table :forums do |t|
+    t.references :parent
+    t.string :name
+    t.string :description
+  end
+  ActiveRecord::Base.connection.create_table :users do |t|
+    t.string :name
+    t.string :rank
+    t.timestamp :birthday
+    t.timestamp :joined
+    t.timestamp :active
+    t.string :signature
+  end
+  ActiveRecord::Base.connection.create_table :groups do |t|
+    t.string :name
+  end
+  ActiveRecord::Base.connection.create_table :users_groups do |t|
+    t.references :user
+    t.references :group
+  end
+end
+
 
 def url_thread(t, s = 0)
   URI("https://www.tapatalk.com/groups/metanetfr/viewtopic.php?t=#{t}&start=#{s}")
@@ -109,3 +185,9 @@ def parse_forum(id)
     parent: doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
   }
 end
+
+def setup
+  setup_db if !File.file?(CONFIG['database'])
+end
+
+setup

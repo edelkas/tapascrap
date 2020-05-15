@@ -4,14 +4,21 @@
   - Maybe modify some of the parsing strategies to be more consistent
     (ie. use parent.at instead of next or children[n]).
 
+Additional things to scrap from users:
+
+* Profile image.
+
 Additional things to scrap from threads:
 
 * Pins.
 * Locked.
+* Polls.
+* Announcements.
 * Other similar properties?
 
 Additional things to scrap from posts:
 
+* Last edit date, number of edits.
 * Parse QUOTES properly.
 * Attachments (event if they don't exist, have a note).
 * Likes?
