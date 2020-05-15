@@ -95,7 +95,7 @@ def url_forum(id)
   URI("https://www.tapatalk.com/groups/metanetfr/viewforum.php?f=#{id}")
 end
 
-def download_thread(t, s)
+def download_thread(t, s = 0)
   Nokogiri::HTML(open(url_thread(t, s)))
 end
 
@@ -107,7 +107,7 @@ def download_forum(id)
   Nokogiri::HTML(open(url_forum(id)))
 end
 
-def parse_posts(t, s)
+def parse_posts(t, s = 0)
   doc = download_thread(t, s) rescue nil
   return if doc.nil? # thread does not exist
   posts = doc.at('div[class="viewtopic_wrapper topic_data_for_js"]')
@@ -178,16 +178,16 @@ end
 def parse_forum(id)
   doc = download_forum(id) rescue nil
   return if doc.nil? # forum does not exist
-  atts = {
-    id: id,
-    name: doc.at('h2').content.strip rescue "",
-    description: doc.at('p[class="forum-description cl-af"]').content rescue "",
-    parent: doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
-  }
+  atts = { id: id }
+  atts[:name] = doc.at('h2').content.strip rescue ""
+  atts[:description] = doc.at('p[class="forum-description cl-af"]').content rescue ""
+  atts[:parent] = doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
 end
 
 def setup
   setup_db if !File.file?(CONFIG['database'])
+  posts = parse_posts(12804)
+  print posts.map{ |p| "#{p[:date]}, #{p[:username]}, #{p[:id]}" }.join("\n")
 end
 
 setup
