@@ -4,8 +4,8 @@ require 'open-uri'
 require 'nokogiri'
 require 'active_record'
 
-THREAD_START = 1
-THREAD_END = 24462
+TOPIC_START = 1
+TOPIC_END = 24462
 FORUM_START = 1
 FORUM_END = 66
 POSTS_PER_PAGE = 10
@@ -15,23 +15,23 @@ CONFIG = {
 }
 
 class Post < ActiveRecord::Base
-  belongs_to :thread
+  belongs_to :topic
   belongs_to :user
 end
 
-class Thread < ActiveRecord::Base
+class Topic < ActiveRecord::Base
   belongs_to :forum
   belongs_to :user
   has_many :posts
 end
 
 class Forum < ActiveRecord::Base
-  has_many :threads
+  has_many :topics
 end
 
 class User < ActiveRecord::Base
   has_many :posts
-  has_many :threads
+  has_many :topics
   has_and_belongs_to_many :groups
 end
 
@@ -45,12 +45,12 @@ def setup_db
     :database => CONFIG['database']
   )
   ActiveRecord::Base.connection.create_table :posts do |t|
-    t.references :thread, index: true
+    t.references :topic, index: true
     t.references :user, index: true
     t.timestamp :date
     t.string :content
   end
-  ActiveRecord::Base.connection.create_table :threads do |t|
+  ActiveRecord::Base.connection.create_table :topics do |t|
     t.references :forum, index: true
     t.references :user, index: true
     t.string :name
@@ -83,7 +83,7 @@ def setup_db
 end
 
 
-def url_thread(t, s = 0)
+def url_topic(t, s = 0)
   URI("https://www.tapatalk.com/groups/metanetfr/viewtopic.php?t=#{t}&start=#{s}")
 end
 
@@ -95,8 +95,8 @@ def url_forum(id)
   URI("https://www.tapatalk.com/groups/metanetfr/viewforum.php?f=#{id}")
 end
 
-def download_thread(t, s = 0)
-  Nokogiri::HTML(open(url_thread(t, s)))
+def download_topic(t, s = 0)
+  Nokogiri::HTML(open(url_topic(t, s)))
 end
 
 def download_member(id)
@@ -108,8 +108,8 @@ def download_forum(id)
 end
 
 def parse_posts(t, s = 0)
-  doc = download_thread(t, s) rescue nil
-  return if doc.nil? # thread does not exist
+  doc = download_topic(t, s) rescue nil
+  return if doc.nil? # topic does not exist
   posts = doc.at('div[class="viewtopic_wrapper topic_data_for_js"]')
              .search('div[class="postbody"]')
              .map{ |p|
@@ -118,17 +118,17 @@ def parse_posts(t, s = 0)
                {
                  t: t,
                  id:       p['id'][/\d+/].to_i,
-                 user:     p.parent.at('dl')['data-uid'].to_i,
-                 username: p.parent.at('dl').at('a[itemprop="name"]').content,
+                 user:     (p.parent.at('script').content[/"POSTER_ID":"(\d+)"/, 1].to_i rescue 0),
+                 username: (p.parent.at('script').content[/"POST_AUTHOR":"(.*?)"/, 1] rescue 'Guest'),
                  date:     p.at('time')['datetime'],
                  content:  content.inner_html
                }
              }
 end
 
-def parse_thread(t)
-  doc = download_thread(t) rescue nil
-  return if doc.nil? # thread does not exist
+def parse_topic(t)
+  doc = download_topic(t) rescue nil
+  return if doc.nil? # topic does not exist
   atts = {
     id: t,
     forum: doc.search('span[data-forum-id]').last['data-forum-id'].to_i,
@@ -138,11 +138,11 @@ def parse_thread(t)
     posts: doc.at('div[class="pagination"]').content[/\d+/i].to_i,
     pages: doc.at('div[class="pagination"]').search('a[class="button"]').last.content.to_i
   }
-  (1..atts[:pages]).each{ |page| parse_posts(t, POSTS_PER_PAGE * (s - 1)) }
+  (1..atts[:pages]).each{ |s| parse_posts(t, POSTS_PER_PAGE * (s - 1)) }
 end
 
-def parse_threads
-  (THREAD_START..THREAD_END).each{ |t| parse_thread(t) }
+def parse_topics
+  (TOPIC_START..TOPIC_END).each{ |t| parse_topic(t) }
 end
 
 # Note: Since we don't know the member list, we should first parse all posts,
@@ -186,8 +186,7 @@ end
 
 def setup
   setup_db if !File.file?(CONFIG['database'])
-  posts = parse_posts(12804)
-  print posts.map{ |p| "#{p[:date]}, #{p[:username]}, #{p[:id]}" }.join("\n")
+  #posts = parse_topic(12804)
 end
 
 setup
