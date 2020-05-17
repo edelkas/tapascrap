@@ -11,7 +11,7 @@ FORUM_END = 66
 POSTS_PER_PAGE = 10
 CONFIG = {
   'adapter'  => 'sqlite3',
-  'database' => 'tapa.sql'
+  'database' => 'db.sql'
 }
 
 class Post < ActiveRecord::Base
@@ -37,6 +37,9 @@ end
 
 class Group < ActiveRecord::Base
   has_and_belongs_to_many :users
+end
+
+class Config < ActiveRecord::Base
 end
 
 def setup_db
@@ -80,6 +83,14 @@ def setup_db
     t.references :user
     t.references :group
   end
+  ActiveRecord::Base.connection.create_table :configs do |t|
+    t.string :key
+    t.string :value
+  end
+  Config.create(key: "topic start", value: TOPIC_START)
+  Config.create(key: "topic end", value: TOPIC_END)
+  Config.create(key: "forum start", value: FORUM_START)
+  Config.create(key: "forum end", value: FORUM_END)
 end
 
 
@@ -184,9 +195,21 @@ def parse_forum(id)
   atts[:parent] = doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
 end
 
+def parse_forums
+  f_start = Config.find_by(key: "topic start") || TOPIC_START
+  f_end = Config.find_by(key: "topic end") || TOPIC_END
+  (f_start..f_end).each{ |f| parse_forum(f) }
+end
+
 def setup
-  setup_db if !File.file?(CONFIG['database'])
-  #posts = parse_topic(12804)
+  if !File.file?(CONFIG['database'])
+    setup_db
+  else
+    ActiveRecord::Base.establish_connection(
+      :adapter  => CONFIG['adapter'],
+      :database => CONFIG['database']
+    )
+  end
 end
 
 setup

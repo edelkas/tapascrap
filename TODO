@@ -10,6 +10,7 @@ Additional things to scrap from users:
 
 Additional things to scrap from threads:
 
+* Date of first and last post.
 * Pins.
 * Locked.
 * Polls.
@@ -26,9 +27,6 @@ Additional things to scrap from posts:
 
 Additional things to scrap from forums:
 
-* It's important to obtain the forum hierarchy tree, so we know which forums are
-  subforums to which forums. For this, it's enough to know which is the parent
-  of each forum, being the "root" the parent of the top level forums.
 * Moderators for each forum.
 
 Other things to scrap:
