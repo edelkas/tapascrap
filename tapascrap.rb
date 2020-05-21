@@ -234,4 +234,10 @@ def setup
   end
 end
 
+def parse
+  parse_forums # This creates the Forum and Topic objects
+  parse_topics # This creates the Topic and Post objects
+end
+
 setup
+#parse
