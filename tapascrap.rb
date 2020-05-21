@@ -9,6 +9,7 @@ TOPIC_END = 24462
 FORUM_START = 1
 FORUM_END = 66
 POSTS_PER_PAGE = 10
+TOPIC_PER_FORUM = 25
 CONFIG = {
   'adapter'  => 'sqlite3',
   'database' => 'db.sql'
@@ -58,6 +59,9 @@ def setup_db
     t.references :user, index: true
     t.string :name
     t.timestamp :date
+    t.timestamp :date_last
+    t.integer :views
+    t.integer :posts
     t.boolean :pinned
     t.boolean :locked
     t.boolean :announcement
@@ -67,6 +71,7 @@ def setup_db
     t.references :parent
     t.string :name
     t.string :description
+    t.integer :topics
   end
   ActiveRecord::Base.connection.create_table :users do |t|
     t.string :name
@@ -186,6 +191,20 @@ def parse_member(id)
   atts[:signature] = doc.at('div[class="signature standalone"]').inner_html rescue nil
 end
 
+def parse_forum_page(f, s)
+  atts = {}
+  doc.at('ul[class="topiclist topics"]').children.each{ |t|
+    replies = t.at('dd[class="posts"]')
+    replies.children.last.remove
+    replies.content.to_s.strip
+    Topic.find_or_create_by(id: t.at('a[class="topictitle"]')['data-topic_id'].to_i).update(
+      name: t.at('a[class="topictitle"]').content.to_s,
+      user: User.find_or_create_by(id: t.at('a[class="username"]')['href'][/\d+/].to_i),
+      posts: replies + 1
+    )
+  }
+end
+
 def parse_forum(id)
   doc = download_forum(id) rescue nil
   return if doc.nil? # forum does not exist
@@ -193,6 +212,9 @@ def parse_forum(id)
   atts[:name] = doc.at('h2').content.strip rescue ""
   atts[:description] = doc.at('p[class="forum-description cl-af"]').content rescue ""
   atts[:parent] = doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
+  atts[:topic_count] = doc.at('div[class="pagination"]').content[/\d+/].to_i rescue 0
+  atts[:pages] = doc.at('div[class="pagination"]').search('a[class="button"]').last.content.to_i rescue 0
+  (1..atts[:pages]).each{ |s| parse_forum_page(t, TOPICS_PER_FORUM * (s - 1)) }
 end
 
 def parse_forums
