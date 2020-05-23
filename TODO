@@ -18,6 +18,7 @@ Additional things to scrap from threads:
 
 Additional things to scrap from posts:
 
+* Polls (options, votes, ...)
 * Last edit date, number of edits.
 * Parse QUOTES properly.
 * Attachments (event if they don't exist, have a note).

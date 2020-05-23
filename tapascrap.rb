@@ -62,6 +62,7 @@ def setup_db
     t.timestamp :date_last
     t.integer :views
     t.integer :posts
+    t.integer :last_post
     t.boolean :pinned
     t.boolean :locked
     t.boolean :announcement
@@ -191,18 +192,38 @@ def parse_member(id)
   atts[:signature] = doc.at('div[class="signature standalone"]').inner_html rescue nil
 end
 
+def scale(s)
+  a = s.downcase.split /(?=[a-z])/
+  Integer(a.first.to_f * Hash.new(1).merge('k' => 1000, 'm' => 1000**2)[a[1]] + 0.5)
+end
+
 def parse_forum_page(f, s)
   atts = {}
-  doc.at('ul[class="topiclist topics"]').children.each{ |t|
+  # TODO: Download page here!
+  doc.at('div[class="forumbg normal"]').at('ul[class="topiclist topics"]').children.each{ |t|
     replies = t.at('dd[class="posts"]')
     replies.children.last.remove
     replies.content.to_s.strip
+    views = t.at('dd[class="views"]')
+    views.children.last.remove
+    views.content.to_s.strip
     Topic.find_or_create_by(id: t.at('a[class="topictitle"]')['data-topic_id'].to_i).update(
       name: t.at('a[class="topictitle"]').content.to_s,
+      forum: Forum.find_or_create_by(id: f),
       user: User.find_or_create_by(id: t.at('a[class="username"]')['href'][/\d+/].to_i),
-      posts: replies + 1
+      posts: scale(replies) + 1,
+      views: scale(views),
+      date: t.at('time')['datetime'].to_s,
+      date_last: t.at('dd[class="lastpost"]').at('span[class="timespan"]')['title'].to_s,
+      last_post: t.at('dd[class="lastpost"]').at('span[class="sr-only"]').parent['href'][/#p(\d+)/, 1].to_i,
+      pinned: !t.at('i[class="icon icon-small icon-sticky ml5"]').nil?,
+      locked: !t.at('i[class="icon icon-small icon-locked ml5"]').nil?,
+      poll: !t.at('i[class="icon icon-small icon-poll ml5"]').nil?,
+      announcement: false
     )
   }
+  # Do the same with doc.at('div[class="forumbg announcement"]'), but instead of
+  # repeating the code, abstract it. Clean the way we parse views and replies.
 end
 
 def parse_forum(id)
