@@ -69,10 +69,11 @@ def setup_db
     t.boolean :poll
   end
   ActiveRecord::Base.connection.create_table :forums do |t|
-    t.references :parent
+    t.integer :parent
     t.string :name
     t.string :description
-    t.integer :topics
+    t.integer :topic_count
+    t.integer :last_post
   end
   ActiveRecord::Base.connection.create_table :users do |t|
     t.string :name
@@ -97,6 +98,12 @@ def setup_db
   Config.create(key: "topic end", value: TOPIC_END)
   Config.create(key: "forum start", value: FORUM_START)
   Config.create(key: "forum end", value: FORUM_END)
+  Forum.find_or_create_by(id: 0).update(
+    name: "Root",
+    description: "Root forum.",
+    topic_count: 0,
+    parent: 0
+  )
 end
 
 
@@ -108,8 +115,8 @@ def url_member(id)
   URI("https://www.tapatalk.com/groups/metanetfr/memberlist.php?mode=viewprofile&u=#{id}")
 end
 
-def url_forum(id)
-  URI("https://www.tapatalk.com/groups/metanetfr/viewforum.php?f=#{id}")
+def url_forum(f, s = 0)
+  URI("https://www.tapatalk.com/groups/metanetfr/viewforum.php?f=#{f}&start=#{s}")
 end
 
 def download_topic(t, s = 0)
@@ -120,8 +127,8 @@ def download_member(id)
   Nokogiri::HTML(open(url_member(id)))
 end
 
-def download_forum(id)
-  Nokogiri::HTML(open(url_forum(id)))
+def download_forum(f, s = 0)
+  Nokogiri::HTML(open(url_forum(f, s)))
 end
 
 def parse_posts(t, s = 0)
@@ -162,10 +169,10 @@ def parse_topics
   (TOPIC_START..TOPIC_END).each{ |t| parse_topic(t) }
 end
 
-# Note: Since we don't know the member list, we should first parse all posts,
+# Note: Since we don't know the member list, we must first parse all posts,
 # and create all members based on the posts (we won't be able to find members
 # who didn't post). After that, we loop through them executing this method.
-def parse_member(id)
+def parse_user(id)
   doc = download_member(id) rescue nil
   return if doc.nil? # member does not exist
   atts = {
@@ -192,15 +199,18 @@ def parse_member(id)
   atts[:signature] = doc.at('div[class="signature standalone"]').inner_html rescue nil
 end
 
+def parse_users
+  User.all.each{ |u| parse_user(u.id) }
+end
+
 def scale(s)
   a = s.downcase.split /(?=[a-z])/
   Integer(a.first.to_f * Hash.new(1).merge('k' => 1000, 'm' => 1000**2)[a[1]] + 0.5)
 end
 
-def parse_forum_page(f, s)
-  atts = {}
-  # TODO: Download page here!
-  doc.at('div[class="forumbg normal"]').at('ul[class="topiclist topics"]').children.each{ |t|
+def parse_forum_topics(doc, f, type, count, total)
+  doc.at(type).at('ul[class="topiclist topics"]').children.each{ |t|
+    print("\rParsing topic #{count} / #{total}.")
     replies = t.at('dd[class="posts"]')
     replies.children.last.remove
     replies.content.to_s.strip
@@ -219,23 +229,37 @@ def parse_forum_page(f, s)
       pinned: !t.at('i[class="icon icon-small icon-sticky ml5"]').nil?,
       locked: !t.at('i[class="icon icon-small icon-locked ml5"]').nil?,
       poll: !t.at('i[class="icon icon-small icon-poll ml5"]').nil?,
-      announcement: false
+      announcement: s[/announcement/].nil? ? false : true
     )
   }
-  # Do the same with doc.at('div[class="forumbg announcement"]'), but instead of
-  # repeating the code, abstract it. Clean the way we parse views and replies.
 end
 
-def parse_forum(id)
-  doc = download_forum(id) rescue nil
+def parse_forum_page(doc, f, count, total)
+  parse_forum_topics(doc, f, 'div[class="forumbg announcement"]', count, total) if !doc.at('div[class="forumbg announcement"]').nil?
+  parse_forum_topics(doc, f, 'div[class="forumbg normal"]', count, total) if !doc.at('div[class="forumbg normal"]').nil?
+end
+
+def parse_forum(f)
+  doc = download_forum(f) rescue nil
   return if doc.nil? # forum does not exist
-  atts = { id: id }
+  print("Parsing forum #{f}.\n")
+  atts = {}
   atts[:name] = doc.at('h2').content.strip rescue ""
   atts[:description] = doc.at('p[class="forum-description cl-af"]').content rescue ""
   atts[:parent] = doc.search('span[data-forum-id]').last['data-forum-id'].to_i rescue 0 # 0 if root
   atts[:topic_count] = doc.at('div[class="pagination"]').content[/\d+/].to_i rescue 0
-  atts[:pages] = doc.at('div[class="pagination"]').search('a[class="button"]').last.content.to_i rescue 0
-  (1..atts[:pages]).each{ |s| parse_forum_page(t, TOPICS_PER_FORUM * (s - 1)) }
+  pages = doc.at('div[class="pagination"]').search('a[class="button"]').last.content.to_i rescue 0
+  Forum.find_or_create_by(id: f).update(
+    name: atts[:name],
+    description: atts[:description],
+    parent: atts[:parent],
+    topic_count: atts[:topic_count]
+  )
+  parse_forum_page(doc, f, 0, atts[:topic_count])    # parse page 0
+  (1..pages - 1).each{ |s| # parse remaining pages
+    doc = download_forum(f, TOPICS_PER_FORUM * s)
+    parse_forum_page(doc, f, TOPICS_PER_FORUM * s, atts[:topic_count])
+  }
 end
 
 def parse_forums
@@ -256,9 +280,13 @@ def setup
 end
 
 def parse
-  parse_forums # This creates the Forum and Topic objects
-  parse_topics # This creates the Topic and Post objects
+  parse_forums # Creates Forum and Topic objects
+  parse_topics # Creates Topic, Post and User objects
+  parse_users
 end
 
 setup
+
+parse_forum(1)
+
 #parse
