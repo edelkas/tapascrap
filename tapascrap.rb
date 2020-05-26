@@ -9,7 +9,7 @@ TOPIC_END = 24462
 FORUM_START = 1
 FORUM_END = 66
 POSTS_PER_PAGE = 10
-TOPIC_PER_FORUM = 25
+TOPICS_PER_FORUM = 25
 CONFIG = {
   'adapter'  => 'sqlite3',
   'database' => 'db.sql'
@@ -61,7 +61,7 @@ def setup_db
     t.timestamp :date
     t.timestamp :date_last
     t.integer :views
-    t.integer :posts
+    t.integer :post_count
     t.integer :last_post
     t.boolean :pinned
     t.boolean :locked
@@ -213,15 +213,15 @@ def parse_forum_topics(doc, f, type, count, total)
     print("\rParsing topic #{count} / #{total}.")
     replies = t.at('dd[class="posts"]')
     replies.children.last.remove
-    replies.content.to_s.strip
+    replies = replies.content.to_s.strip
     views = t.at('dd[class="views"]')
     views.children.last.remove
-    views.content.to_s.strip
+    views = views.content.to_s.strip
     Topic.find_or_create_by(id: t.at('a[class="topictitle"]')['data-topic_id'].to_i).update(
       name: t.at('a[class="topictitle"]').content.to_s,
       forum: Forum.find_or_create_by(id: f),
-      user: User.find_or_create_by(id: t.at('a[class="username"]')['href'][/\d+/].to_i),
-      posts: scale(replies) + 1,
+      user: User.find_or_create_by(id: t.at('a[itemprop="name"]')['href'][/\d+/].to_i),
+      post_count: scale(replies) + 1,
       views: scale(views),
       date: t.at('time')['datetime'].to_s,
       date_last: t.at('dd[class="lastpost"]').at('span[class="timespan"]')['title'].to_s,
@@ -229,7 +229,7 @@ def parse_forum_topics(doc, f, type, count, total)
       pinned: !t.at('i[class="icon icon-small icon-sticky ml5"]').nil?,
       locked: !t.at('i[class="icon icon-small icon-locked ml5"]').nil?,
       poll: !t.at('i[class="icon icon-small icon-poll ml5"]').nil?,
-      announcement: s[/announcement/].nil? ? false : true
+      announcement: type[/announcement/].nil? ? false : true
     )
   }
 end
