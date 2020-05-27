@@ -209,18 +209,19 @@ def scale(s)
 end
 
 def parse_forum_topics(doc, f, type, count, total)
-  doc.at(type).at('ul[class="topiclist topics"]').children.each{ |t|
-    print("\rParsing topic #{count} / #{total}.")
+  doc.at(type).at('ul[class="topiclist topics"]').children.each_with_index{ |t, i|
+    print("\rParsing forum #{f}. Reading topic #{count + i + 1} / #{total}.")
     replies = t.at('dd[class="posts"]')
     replies.children.last.remove
-    replies = replies.content.to_s.strip
+    replies = replies.content.to_s.strip rescue 1
     views = t.at('dd[class="views"]')
     views.children.last.remove
-    views = views.content.to_s.strip
+    views = views.content.to_s.strip rescue 0
+    user_id =  t.at('div[class="topic-poster"]').at('a')['href'][/\d+/].to_i rescue 0
     Topic.find_or_create_by(id: t.at('a[class="topictitle"]')['data-topic_id'].to_i).update(
       name: t.at('a[class="topictitle"]').content.to_s,
       forum: Forum.find_or_create_by(id: f),
-      user: User.find_or_create_by(id: t.at('a[itemprop="name"]')['href'][/\d+/].to_i),
+      user: User.find_or_create_by(id: user_id),
       post_count: scale(replies) + 1,
       views: scale(views),
       date: t.at('time')['datetime'].to_s,
@@ -242,7 +243,6 @@ end
 def parse_forum(f)
   doc = download_forum(f) rescue nil
   return if doc.nil? # forum does not exist
-  print("Parsing forum #{f}.\n")
   atts = {}
   atts[:name] = doc.at('h2').content.strip rescue ""
   atts[:description] = doc.at('p[class="forum-description cl-af"]').content rescue ""
@@ -290,3 +290,5 @@ setup
 parse_forum(1)
 
 #parse
+
+puts ""
